@@ -1,8 +1,9 @@
 ﻿using Stride.Core.Mathematics;
+using Stride.Engine;
 
 public class AStar
 {
-    public List<Vector3> FindPath(Dictionary<Vector3, List<int>> navigationMap, Vector3 start, Vector3 goal, float maxSlope)
+    public List<Vector3> FindPath(Dictionary<Vector3, List<int>> navigationMap, Dictionary<Vector3, BoundingBox> boundingBoxes, Vector3 start, Vector3 goal, float maxSlope)
     {
         PriorityQueue<Node> openSet = new PriorityQueue<Node>();
         HashSet<Vector3> closedSet = new HashSet<Vector3>();
@@ -25,9 +26,9 @@ public class AStar
             foreach (int neighborIndex in navigationMap[current.Position])
             {
                 Vector3 neighbor = navigationMap.Keys.ToArray()[neighborIndex];
-                float neighborSlope = CalculateSlope(current.Position, neighbor);
 
-                if (Math.Abs(neighborSlope) > maxSlope)
+                BoundingBox neighborBoundingBox = boundingBoxes[neighbor];
+                if (!IsSlopeAcceptable(current.Position, neighbor, maxSlope) || !IsBoundingBoxValid(current.Position, neighborBoundingBox))
                     continue;
 
                 float tentativeGScore = gScore[current.Position] + Distance(current.Position, neighbor);
@@ -38,14 +39,33 @@ public class AStar
                     gScore[neighbor] = tentativeGScore;
 
                     float fScore = tentativeGScore + Heuristic(neighbor, goal);
-                    openSet.Enqueue(new Node(neighbor, fScore, tentativeGScore, neighborSlope));
+                    openSet.Enqueue(new Node(neighbor, fScore, tentativeGScore, 0)); // Slope is not relevant for now
                 }
             }
         }
 
         return null; // Path not found
     }
+    private bool IsSlopeAcceptable(Vector3 from, Vector3 to, float maxSlope)
+    {
+        // Calculate the vertical change (rise) and horizontal distance (run)
+        float verticalChange = to.Y - from.Y;
+        float horizontalDistance = Vector2.Distance(new Vector2(from.X, from.Z), new Vector2(to.X, to.Z));
 
+        // Calculate the slope angle in radians
+        float slopeAngleRad = (float)Math.Atan(verticalChange / horizontalDistance);
+
+        // Convert the slope angle to degrees
+        float slopeAngleDeg = (float)(slopeAngleRad * (180f / Math.PI));
+
+        // Check if the absolute value of the slope angle is within the acceptable range
+        return Math.Abs(slopeAngleDeg) <= maxSlope;
+    }
+    private bool IsBoundingBoxValid(Vector3 from, BoundingBox boundingBox)
+    {    
+        Ray ray = new Ray(from, boundingBox.Center - from);
+        return ray.Intersects(ref boundingBox);
+    }
     private List<Vector3> ReconstructPath(Dictionary<Vector3, Vector3> cameFrom, Vector3 current)
     {
         List<Vector3> path = new List<Vector3>();

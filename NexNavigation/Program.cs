@@ -28,18 +28,4 @@ Vector3 start = new Vector3(0, 0, 0);
 Vector3 goal = new Vector3(1, 1, 0);
 
 // Find the path
-List<Vector3> path = aStar.FindPath(navigationMap, start, goal,100);
-
-// Print the path
-if (path != null)
-{
-    Console.WriteLine("Path found:");
-    foreach (Vector3 point in path)
-    {
-        Console.WriteLine($"({point.X}, {point.Y}, {point.Z})");
-    }
-}
-else
-{
-    Console.WriteLine("Path not found.");
-}
+//List<Vector3> path = aStar.FindPath(navigationMap, start, goal,100f);
