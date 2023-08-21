@@ -1,33 +1,59 @@
 ﻿using Stride.Core.Mathematics;
 using Stride.Engine;
+using System;
 
 public class AStar
 {
     public List<Vector3> FindPath(Dictionary<Vector3, List<int>> navigationMap, Dictionary<Vector3, BoundingBox> boundingBoxes, Vector3 start, Vector3 goal, float maxSlope)
     {
+        BoundingBox goalBoundingBox;
+        if (boundingBoxes.ContainsKey(goal))
+        {
+            goalBoundingBox = boundingBoxes[goal];
+        }
+        else
+        {
+            // Default bounding box if goal is not in the boundingBoxes dictionary
+            goalBoundingBox = new BoundingBox(goal - new Vector3(0.5f), goal + new Vector3(0.5f));
+        }
+
         PriorityQueue<Node> openSet = new PriorityQueue<Node>();
         HashSet<Vector3> closedSet = new HashSet<Vector3>();
         Dictionary<Vector3, Vector3> cameFrom = new Dictionary<Vector3, Vector3>();
         Dictionary<Vector3, float> gScore = new Dictionary<Vector3, float>();
 
-        openSet.Enqueue(new Node(start, Heuristic(start, goal), 0, 0));
+        openSet.Enqueue(new Node(start, Heuristic(start, goalBoundingBox.Center),0f));
 
         gScore[start] = 0;
 
         while (openSet.Count > 0)
         {
             Node current = openSet.Dequeue();
-
-            if (current.Position == goal)
-                return ReconstructPath(cameFrom, current.Position);
+            if (goalBoundingBox.Contains(ref goal) is not ContainmentType.Disjoint)
+            {
+                // Add the goal to the cameFrom dictionary to ensure it's included in the path
+                cameFrom[goal] = current.Position;
+                return ReconstructPath(cameFrom, goal);
+            }
 
             closedSet.Add(current.Position);
 
             foreach (int neighborIndex in navigationMap[current.Position])
             {
                 Vector3 neighbor = navigationMap.Keys.ToArray()[neighborIndex];
+                if (closedSet.Contains(neighbor))
+                    continue;
 
-                BoundingBox neighborBoundingBox = boundingBoxes[neighbor];
+                BoundingBox neighborBoundingBox;
+                if (boundingBoxes.ContainsKey(neighbor))
+                {
+                    neighborBoundingBox = boundingBoxes[neighbor];
+                }
+                else
+                {
+                    neighborBoundingBox = new BoundingBox(neighbor - new Vector3(0.5f), neighbor + new Vector3(0.5f));
+                }
+
                 if (!IsSlopeAcceptable(current.Position, neighbor, maxSlope) || !IsBoundingBoxValid(current.Position, neighborBoundingBox))
                     continue;
 
@@ -38,14 +64,15 @@ public class AStar
                     cameFrom[neighbor] = current.Position;
                     gScore[neighbor] = tentativeGScore;
 
-                    float fScore = tentativeGScore + Heuristic(neighbor, goal);
-                    openSet.Enqueue(new Node(neighbor, fScore, tentativeGScore, 0)); // Slope is not relevant for now
+                    float fScore = tentativeGScore + Heuristic(neighbor, goalBoundingBox.Center);
+                    openSet.Enqueue(new Node(neighbor, fScore, tentativeGScore));
                 }
             }
         }
 
         return null; // Path not found
     }
+
     private bool IsSlopeAcceptable(Vector3 from, Vector3 to, float maxSlope)
     {
         // Calculate the vertical change (rise) and horizontal distance (run)
@@ -88,28 +115,18 @@ public class AStar
         return Distance(a, b);
     }
 
-    private float CalculateSlope(Vector3 pointA, Vector3 pointB)
-    {
-        float heightDifference = Math.Abs(pointA.Y - pointB.Y);
-        float horizontalDistance = Vector2.Distance(new Vector2(pointA.X, pointA.Z), new Vector2(pointB.X, pointB.Z));
-        float slopeAngleRad = (float)Math.Atan(heightDifference / horizontalDistance);
-        float slopeAngleDeg = (float)(slopeAngleRad * (180f / Math.PI));
-        return slopeAngleDeg;
-    }
-
     private class Node : IComparable<Node>
     {
         public Vector3 Position { get; }
         public float FScore { get; }
         public float GScore { get; }
-        public float Slope { get; }
 
-        public Node(Vector3 position, float fScore, float gScore, float slope)
+        public Node(Vector3 position, float fScore, float gScore)
         {
             Position = position;
             FScore = fScore;
             GScore = gScore;
-            Slope = slope;
+         
         }
 
         public int CompareTo(Node other)
